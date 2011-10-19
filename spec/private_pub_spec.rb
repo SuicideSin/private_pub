@@ -49,9 +49,31 @@ describe PrivatePub do
     subscription[:signature].should == Digest::SHA1.hexdigest("tokenchannel123")
   end
 
+  it "determines that the server does not use HTTPS if the URL scheme is not HTTPS" do
+    PrivatePub.ssl?.should == false
+  end
+
+  it "determines that the server uses HTTPS if the URL scheme is HTTPS" do
+    PrivatePub.config[:server] = "https://localhost:9292/faye"
+    PrivatePub.ssl?.should == true
+  end
+
   it "publishes to server using Net::HTTP" do
-    Net::HTTP.should_receive(:post_form).with(URI.parse(PrivatePub.config[:server]), "hello world").and_return(:result)
-    PrivatePub.publish("hello world").should == :result
+    uri = URI.parse(PrivatePub.config[:server])
+    http = mock(:http).as_null_object
+
+    Net::HTTP.should_receive(:new).with(uri.host, uri.port).and_return(http)
+    http.should_receive(:start).and_return(:result)
+    PrivatePub.publish("data" => "hello world").should == :result
+  end
+
+  it "publishes to server using an HTTPS connection if the server uses an HTTPS scheme" do
+    http = mock(:http).as_null_object
+
+    PrivatePub.config[:server] = "https://localhost:9292/faye"
+    Net::HTTP.should_receive(:new).and_return(http)
+    http.should_receive(:use_ssl=).with(true)
+    PrivatePub.publish("data" => "hello world")
   end
 
   it "has a FayeExtension instance" do

@@ -23,6 +23,11 @@ module PrivatePub
       yaml.each { |k, v| config[k.to_sym] = v }
     end
 
+    def ssl?
+      uri = URI.parse(@config[:server])
+      uri.scheme == "https"
+    end
+
     def subscription(options = {})
       sub = {:timestamp => (Time.now.to_f * 1000).round}.merge(options)
       sub[:signature] = Digest::SHA1.hexdigest([config[:secret_token], sub[:channel], sub[:timestamp]].join)
@@ -30,7 +35,12 @@ module PrivatePub
     end
 
     def publish(data)
-      Net::HTTP.post_form(URI.parse(config[:server]), data)
+      url  = URI.parse(@config[:server])
+      req  = Net::HTTP::Post.new(url.path)
+      req.set_form_data(data)
+      http = Net::HTTP.new(url.host, url.port)
+      http.use_ssl = ssl?
+      res  = http.start { |http| http.request(req) }
     end
 
     def publish_to(channel, object = nil, &block)
@@ -39,7 +49,6 @@ module PrivatePub
       message[:data][:data] = object if object
       PrivatePub.publish(:message => message.to_json)
     end
-
 
     def faye_extension
       FayeExtension.new
